@@ -14,25 +14,19 @@ import { Recording, TimeCapsule } from '../types';
 import { getRecordings, getCapsules, saveCapsules } from '../utils/storage';
 import { colors, pixelFont, shadow, shadowSmall, glowPink } from '../theme';
 import SwipeableCard from '../components/SwipeableCard';
+import PixelDatePicker from '../components/PixelDatePicker';
 
 const capsuleImg = require('../../assets/ui/capsule.png');
 const arrowUp = require('../../assets/ui/arrow_up.png');
 const arrowDown = require('../../assets/ui/arrow_down.png');
-
-const DELIVER_OPTIONS = [
-  { label: '1 Day', days: 1 },
-  { label: '3 Days', days: 3 },
-  { label: '1 Week', days: 7 },
-  { label: '2 Weeks', days: 14 },
-  { label: '1 Month', days: 30 },
-];
 
 export default function CapsuleScreen() {
   const [capsules, setCapsules] = useState<TimeCapsule[]>([]);
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [selRec, setSelRec] = useState<string | null>(null);
-  const [selDays, setSelDays] = useState(7);
+  const tomorrow = new Date(Date.now() + 86400000);
+  const [deliverDate, setDeliverDate] = useState(new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate()));
   const [hour, setHour] = useState(8);
   const [minute, setMinute] = useState(0);
 
@@ -48,7 +42,11 @@ export default function CapsuleScreen() {
   async function createCapsule() {
     if (!selRec) { Alert.alert('Error', 'Record a voice first!'); return; }
     const now = Date.now();
-    const deliverAt = now + selDays * 24 * 60 * 60 * 1000;
+    const deliverAt = deliverDate.getTime();
+    if (deliverAt <= now) {
+      if (Platform.OS === 'web') { window.alert('Pick a future date!'); } else { Alert.alert('Error', 'Pick a future date!'); }
+      return;
+    }
     const rec = recordings.find((r) => r.id === selRec);
 
     const capsule: TimeCapsule = {
@@ -134,18 +132,8 @@ export default function CapsuleScreen() {
             <Text style={s.modalTitle}>NEW CAPSULE</Text>
 
             {/* When to deliver */}
-            <Text style={s.label}>OPEN IN</Text>
-            <View style={s.optRow}>
-              {DELIVER_OPTIONS.map((opt) => (
-                <TouchableOpacity
-                  key={opt.days}
-                  style={[s.optBtn, selDays === opt.days && s.optBtnOn]}
-                  onPress={() => setSelDays(opt.days)}
-                >
-                  <Text style={[s.optText, selDays === opt.days && s.optTextOn]}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <Text style={s.label}>OPEN ON</Text>
+            <PixelDatePicker value={deliverDate} onChange={setDeliverDate} />
 
             {/* Time */}
             <Text style={s.label}>ALARM TIME</Text>
@@ -265,21 +253,6 @@ const s = StyleSheet.create({
   modalTitle: { fontFamily: pixelFont, fontSize: 12, color: colors.purple, textAlign: 'center', marginBottom: 16 },
 
   label: { fontFamily: pixelFont, color: colors.textDim, fontSize: 7, marginBottom: 8, letterSpacing: 1 },
-
-  optRow: { flexDirection: 'row', gap: 6, marginBottom: 14, flexWrap: 'wrap' },
-  optBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: colors.bg,
-    borderWidth: 1.5,
-    borderColor: colors.cardBorder,
-    borderBottomWidth: 3,
-    borderBottomColor: '#0e1830',
-  },
-  optBtnOn: { backgroundColor: colors.purple, borderColor: colors.purple, borderBottomColor: '#7030a0' },
-  optText: { fontFamily: pixelFont, color: colors.textDim, fontSize: 7 },
-  optTextOn: { color: '#fff' },
 
   timePicker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   timeCol: { alignItems: 'center' },
