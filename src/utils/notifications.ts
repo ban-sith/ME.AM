@@ -40,7 +40,7 @@ export async function scheduleAlarm(alarm: Alarm): Promise<string> {
     for (const day of alarm.days) {
       const id = await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'Wake Me Up!',
+          title: 'ME:AM',
           body: 'Time to wake up!',
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
@@ -72,7 +72,7 @@ export async function scheduleAlarm(alarm: Alarm): Promise<string> {
 
   return await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Wake Me Up!',
+      title: 'ME:AM',
       body: 'Time to wake up!',
       sound: true,
       priority: Notifications.AndroidNotificationPriority.MAX,
@@ -99,7 +99,7 @@ export async function scheduleSnooze(
 
   return await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Wake Me Up! (Snooze)',
+      title: 'ME:AM (Snooze)',
 
       body: `Snoozed for ${snoozeMinutes} minutes`,
       sound: true,

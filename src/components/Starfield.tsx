@@ -1,11 +1,9 @@
-import React, { useEffect, useRef, useMemo } from 'react';
-import { View, Animated, StyleSheet, Dimensions } from 'react-native';
-
-const { width, height } = Dimensions.get('window');
+import React, { useEffect, useMemo } from 'react';
+import { View, Animated, StyleSheet } from 'react-native';
 
 interface Star {
-  x: number;
-  y: number;
+  x: string;
+  y: string;
   size: number;
   anim: Animated.Value;
   duration: number;
@@ -14,8 +12,8 @@ interface Star {
 export default function Starfield({ count = 30 }: { count?: number }) {
   const stars = useMemo<Star[]>(() =>
     Array.from({ length: count }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * (height - 100),
+      x: `${Math.random() * 100}%`,
+      y: `${Math.random() * 100}%`,
       size: 1 + Math.random() * 2,
       anim: new Animated.Value(Math.random()),
       duration: 1500 + Math.random() * 3000,
@@ -41,8 +39,8 @@ export default function Starfield({ count = 30 }: { count?: number }) {
           style={[
             s.star,
             {
-              left: star.x,
-              top: star.y,
+              left: star.x as any,
+              top: star.y as any,
               width: star.size,
               height: star.size,
               borderRadius: star.size / 2,
@@ -59,6 +57,7 @@ const s = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
+    overflow: 'hidden',
   },
   star: {
     position: 'absolute',

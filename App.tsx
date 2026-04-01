@@ -21,7 +21,7 @@ export default function App() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       const style = document.createElement('style');
-      style.textContent = '* { outline: none !important; -webkit-tap-highlight-color: transparent !important; }';
+      style.textContent = '* { outline: none !important; -webkit-tap-highlight-color: transparent !important; } html, body, #root { background-color: #16213e !important; height: 100% !important; overflow: hidden; }';
       document.head.appendChild(style);
     }
   }, []);

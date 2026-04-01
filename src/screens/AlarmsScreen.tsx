@@ -115,7 +115,7 @@ export default function AlarmsScreen() {
         },
       });
     }
-    Alert.alert('WAKE UP!', rec.name, buttons);
+    Alert.alert('ME:AM', rec.name, buttons);
   }
 
   async function loadData() {
