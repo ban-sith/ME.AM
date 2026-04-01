@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { TouchableOpacity, Animated, StyleSheet } from 'react-native';
+import { TouchableOpacity, Animated, StyleSheet, Platform } from 'react-native';
 import { colors } from '../theme';
 
 interface Props {
@@ -29,9 +29,14 @@ export default function PixelToggle({ value, onToggle }: Props) {
     outputRange: [3, 23],
   });
 
+  const glowStyle = value ? (Platform.OS === 'web'
+    ? { boxShadow: '0 0 8px rgba(46,213,115,0.5)' }
+    : { shadowColor: colors.green, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 8 }
+  ) : {};
+
   return (
     <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
-      <Animated.View style={[s.track, { backgroundColor: trackBg }]}>
+      <Animated.View style={[s.track, { backgroundColor: trackBg }, glowStyle as any]}>
         <Animated.View style={[s.thumb, { left: thumbLeft }]} />
       </Animated.View>
     </TouchableOpacity>
@@ -44,6 +49,8 @@ const s = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   thumb: {
     position: 'absolute',
@@ -51,5 +58,7 @@ const s = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.15)',
   },
 });

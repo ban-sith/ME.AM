@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   Image,
+  Vibration,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
@@ -20,15 +21,17 @@ import {
   scheduleSnooze,
   cancelAlarm,
 } from '../utils/notifications';
-import { colors, pixelFont } from '../theme';
+import { colors, pixelFont, shadow, shadowSmall, glowPink, glowCyan, glowGold, VIBRATION_PATTERNS } from '../theme';
 import PixelToggle from '../components/PixelToggle';
 import SwipeableCard from '../components/SwipeableCard';
+import Waveform from '../components/Waveform';
 
 const addIcon = require('../../assets/ui/add_icon.png');
-const clearAllImg = require('../../assets/ui/clear_all.png');
 const arrowUp = require('../../assets/ui/arrow_up.png');
 const arrowDown = require('../../assets/ui/arrow_down.png');
 const snoozeIcon = require('../../assets/ui/snooze_icon.png');
+const clearAllImg = require('../../assets/ui/clear_all.png');
+const titleImg = require('../../assets/ui/title_alarm.png');
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const SNOOZE_OPTIONS = [0, 5, 10, 15];
@@ -42,53 +45,54 @@ export default function AlarmsScreen() {
   const [selRec, setSelRec] = useState<string | null>(null);
   const [selDays, setSelDays] = useState<number[]>([]);
   const [snooze, setSnooze] = useState(5);
+  const [vibration, setVibration] = useState('default');
   const soundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
     loadData();
     const sub1 = Notifications.addNotificationReceivedListener(onNotif);
-    const sub2 = Notifications.addNotificationResponseReceivedListener((r) =>
-      onNotif(r.notification)
-    );
+    const sub2 = Notifications.addNotificationResponseReceivedListener((r) => onNotif(r.notification));
     return () => { sub1.remove(); sub2.remove(); soundRef.current?.unloadAsync(); };
   }, []);
 
   function onNotif(notification: Notifications.Notification) {
     const data = notification.request.content.data;
-    if (data?.recordingId) playAlarmSound(data.recordingId as string, data.snoozeMinutes as number);
+    if (data?.recordingId) playAlarmSound(data.recordingId as string, data.snoozeMinutes as number, data.vibration as string);
   }
 
-  async function playAlarmSound(recordingId: string, snoozeMin: number) {
+  async function playAlarmSound(recordingId: string, snoozeMin: number, vib: string) {
     const recs = await getRecordings();
     const rec = recs.find((r) => r.id === recordingId);
     if (!rec) return;
+
+    // Vibrate
+    const vibPattern = VIBRATION_PATTERNS.find((v) => v.value === vib);
+    if (vibPattern && vibPattern.pattern.length > 0 && Platform.OS !== 'web') {
+      Vibration.vibrate(vibPattern.pattern, true);
+    }
 
     if (soundRef.current) { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); }
     await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true });
     const { sound } = await Audio.Sound.createAsync({ uri: rec.uri }, { shouldPlay: true, volume: 1.0, isLooping: true });
     soundRef.current = sound;
 
-    setTimeout(async () => { await sound.stopAsync(); await sound.unloadAsync(); }, 60000);
+    setTimeout(async () => { await sound.stopAsync(); await sound.unloadAsync(); Vibration.cancel(); }, 60000);
 
     const buttons: any[] = [
       {
         text: 'Dismiss',
-        onPress: async () => { await sound.stopAsync(); await sound.unloadAsync(); soundRef.current = null; },
+        onPress: async () => { await sound.stopAsync(); await sound.unloadAsync(); soundRef.current = null; Vibration.cancel(); },
       },
     ];
-
     if (snoozeMin > 0) {
       buttons.unshift({
         text: `Snooze (${snoozeMin}m)`,
         onPress: async () => {
-          await sound.stopAsync();
-          await sound.unloadAsync();
-          soundRef.current = null;
+          await sound.stopAsync(); await sound.unloadAsync(); soundRef.current = null; Vibration.cancel();
           await scheduleSnooze('snooze', recordingId, snoozeMin);
         },
       });
     }
-
     Alert.alert('WAKE UP!', rec.name, buttons);
   }
 
@@ -101,7 +105,6 @@ export default function AlarmsScreen() {
 
   async function addAlarm() {
     if (!selRec) { Alert.alert('Error', 'Record a voice first!'); return; }
-
     const alarm: Alarm = {
       id: Date.now().toString(),
       hour, minute,
@@ -109,36 +112,26 @@ export default function AlarmsScreen() {
       enabled: true,
       days: selDays,
       snoozeMinutes: snooze,
+      vibration,
     };
-
-    try {
-      await requestPermissions();
-      alarm.notificationId = await scheduleAlarm(alarm);
-    } catch {
-      // Web doesn't support notifications - alarm still saves
-    }
-
+    try { await requestPermissions(); alarm.notificationId = await scheduleAlarm(alarm); } catch {}
     const updated = [alarm, ...alarms];
     setAlarms(updated);
     await saveAlarms(updated);
     setShowModal(false);
     setSelDays([]);
     setSnooze(5);
+    setVibration('default');
   }
 
   async function toggleAlarm(alarm: Alarm) {
     let updated: Alarm[];
     if (alarm.enabled) {
-      if (alarm.notificationId) {
-        try { await cancelAlarm(alarm.notificationId); } catch {}
-      }
+      if (alarm.notificationId) try { await cancelAlarm(alarm.notificationId); } catch {}
       updated = alarms.map((a) => a.id === alarm.id ? { ...a, enabled: false, notificationId: undefined } : a);
     } else {
       let nid: string | undefined;
-      try {
-        await requestPermissions();
-        nid = await scheduleAlarm(alarm);
-      } catch {}
+      try { await requestPermissions(); nid = await scheduleAlarm(alarm); } catch {}
       updated = alarms.map((a) => a.id === alarm.id ? { ...a, enabled: true, notificationId: nid } : a);
     }
     setAlarms(updated);
@@ -159,9 +152,7 @@ export default function AlarmsScreen() {
       {
         text: 'Delete All', style: 'destructive',
         onPress: async () => {
-          for (const a of alarms) {
-            if (a.notificationId) try { await cancelAlarm(a.notificationId); } catch {}
-          }
+          for (const a of alarms) { if (a.notificationId) try { await cancelAlarm(a.notificationId); } catch {} }
           setAlarms([]);
           await saveAlarms([]);
         },
@@ -173,13 +164,25 @@ export default function AlarmsScreen() {
     setSelDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
   }
 
+  function previewVibration(v: string) {
+    setVibration(v);
+    const p = VIBRATION_PATTERNS.find((vp) => vp.value === v);
+    if (p && p.pattern.length > 0 && Platform.OS !== 'web') {
+      Vibration.vibrate(p.pattern);
+    }
+  }
+
   const getRecName = (id: string) => recordings.find((r) => r.id === id)?.name || '?';
   const pad = (n: number) => n.toString().padStart(2, '0');
   const daysLabel = (days: number[]) => days.length === 0 ? 'Once' : days.length === 7 ? 'Every day' : days.map((d) => DAY_LABELS[d]).join(' ');
+  const vibLabel = (v: string) => VIBRATION_PATTERNS.find((vp) => vp.value === v)?.label || 'Default';
 
   return (
     <View style={s.container}>
-      <Text style={s.title}>ALARMS</Text>
+      <View style={s.titleRow}>
+        <Image source={titleImg} style={s.titleImg} />
+        <Text style={s.title}>ALARMS</Text>
+      </View>
 
       <TouchableOpacity style={s.addBtn} onPress={() => { loadData(); setShowModal(true); }} activeOpacity={0.8}>
         <Image source={addIcon} style={s.addImg} />
@@ -199,24 +202,23 @@ export default function AlarmsScreen() {
         ) : null}
         renderItem={({ item }) => (
           <SwipeableCard onDelete={() => deleteAlarm(item)}>
-          <View
-            style={[s.card, !item.enabled && s.cardOff]}
-          >
-            <View style={s.cardLeft}>
-              <Text style={[s.cardTime, !item.enabled && s.cardTimeOff]}>{pad(item.hour)}:{pad(item.minute)}</Text>
-              <View style={s.cardMeta}>
-                <Text style={s.cardRec}>{getRecName(item.recordingId)}</Text>
-                <Text style={s.cardDays}>{daysLabel(item.days)}</Text>
-                {item.snoozeMinutes > 0 && (
-                  <View style={s.snoozeBadge}>
-                    <Image source={snoozeIcon} style={s.snoozeBadgeImg} />
-                    <Text style={s.snoozeBadgeText}>{item.snoozeMinutes}m</Text>
-                  </View>
-                )}
+            <View style={[s.card, !item.enabled && s.cardOff]}>
+              <View style={s.cardLeft}>
+                <Text style={[s.cardTime, !item.enabled && s.cardTimeOff]}>{pad(item.hour)}:{pad(item.minute)}</Text>
+                <View style={s.cardMeta}>
+                  <Text style={s.cardRec}>{getRecName(item.recordingId)}</Text>
+                  <Text style={s.cardDays}>{daysLabel(item.days)}</Text>
+                  {item.snoozeMinutes > 0 && (
+                    <View style={s.badge}>
+                      <Image source={snoozeIcon} style={s.badgeImg} />
+                      <Text style={s.badgeText}>{item.snoozeMinutes}m</Text>
+                    </View>
+                  )}
+                  <Text style={s.vibText}>{vibLabel(item.vibration)}</Text>
+                </View>
               </View>
+              <PixelToggle value={item.enabled} onToggle={() => toggleAlarm(item)} />
             </View>
-            <PixelToggle value={item.enabled} onToggle={() => toggleAlarm(item)} />
-          </View>
           </SwipeableCard>
         )}
       />
@@ -254,11 +256,7 @@ export default function AlarmsScreen() {
             <Text style={s.label}>REPEAT</Text>
             <View style={s.daysRow}>
               {DAY_LABELS.map((l, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[s.dayBtn, selDays.includes(i) && s.dayBtnOn]}
-                  onPress={() => toggleDay(i)}
-                >
+                <TouchableOpacity key={i} style={[s.dayBtn, selDays.includes(i) && s.dayBtnOn]} onPress={() => toggleDay(i)}>
                   <Text style={[s.dayText, selDays.includes(i) && s.dayTextOn]}>{l}</Text>
                 </TouchableOpacity>
               ))}
@@ -266,16 +264,20 @@ export default function AlarmsScreen() {
 
             {/* Snooze */}
             <Text style={s.label}>SNOOZE</Text>
-            <View style={s.snoozeRow}>
+            <View style={s.optRow}>
               {SNOOZE_OPTIONS.map((m) => (
-                <TouchableOpacity
-                  key={m}
-                  style={[s.snoozeBtn, snooze === m && s.snoozeBtnOn]}
-                  onPress={() => setSnooze(m)}
-                >
-                  <Text style={[s.snoozeText, snooze === m && s.snoozeTextOn]}>
-                    {m === 0 ? 'Off' : `${m}m`}
-                  </Text>
+                <TouchableOpacity key={m} style={[s.optBtn, snooze === m && s.optBtnOn]} onPress={() => setSnooze(m)}>
+                  <Text style={[s.optText, snooze === m && s.optTextOn]}>{m === 0 ? 'Off' : `${m}m`}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Vibration */}
+            <Text style={s.label}>VIBRATION</Text>
+            <View style={s.optRow}>
+              {VIBRATION_PATTERNS.map((v) => (
+                <TouchableOpacity key={v.value} style={[s.optBtn, vibration === v.value && s.vibBtnOn]} onPress={() => previewVibration(v.value)}>
+                  <Text style={[s.optText, vibration === v.value && s.vibTextOn]}>{v.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -292,13 +294,8 @@ export default function AlarmsScreen() {
                 showsHorizontalScrollIndicator={false}
                 style={s.recScroll}
                 renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[s.recChip, selRec === item.id && s.recChipOn]}
-                    onPress={() => setSelRec(item.id)}
-                  >
-                    <Text style={[s.recChipText, selRec === item.id && s.recChipTextOn]} numberOfLines={1}>
-                      {item.name}
-                    </Text>
+                  <TouchableOpacity style={[s.recChip, selRec === item.id && s.recChipOn]} onPress={() => setSelRec(item.id)}>
+                    <Text style={[s.recChipText, selRec === item.id && s.recChipTextOn]} numberOfLines={1}>{item.name}</Text>
                   </TouchableOpacity>
                 )}
               />
@@ -309,11 +306,7 @@ export default function AlarmsScreen() {
               <TouchableOpacity style={s.cancelBtn} onPress={() => setShowModal(false)}>
                 <Text style={s.cancelText}>CANCEL</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.saveBtn, !selRec && { opacity: 0.4 }]}
-                onPress={addAlarm}
-                disabled={!selRec}
-              >
+              <TouchableOpacity style={[s.saveBtn, !selRec && { opacity: 0.4 }]} onPress={addAlarm} disabled={!selRec}>
                 <Text style={s.saveText}>SAVE</Text>
               </TouchableOpacity>
             </View>
@@ -326,13 +319,19 @@ export default function AlarmsScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingTop: 56 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  titleImg: { width: 32, height: 32 },
   title: {
     fontFamily: pixelFont,
     fontSize: 14,
     color: colors.cyan,
     letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   addBtn: {
     flexDirection: 'row',
@@ -340,9 +339,12 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.pink,
     marginHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 20,
     gap: 8,
+    borderBottomWidth: 5,
+    borderBottomColor: '#a03070',
+    ...glowPink,
   },
   addImg: { width: 20, height: 20 },
   addText: { fontFamily: pixelFont, fontSize: 9, color: '#fff' },
@@ -356,20 +358,23 @@ const s = StyleSheet.create({
     backgroundColor: colors.card,
     padding: 14,
     borderRadius: 16,
-    marginBottom: 8,
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
+    borderBottomWidth: 4,
+    borderBottomColor: '#1a2540',
+    ...shadowSmall,
   },
   cardOff: { opacity: 0.45 },
   cardLeft: { flex: 1 },
-  cardTime: { fontFamily: pixelFont, color: colors.gold, fontSize: 20 },
+  cardTime: { fontFamily: pixelFont, color: colors.gold, fontSize: 20, textShadowColor: 'rgba(255,215,0,0.3)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 } as any,
   cardTimeOff: { color: colors.textMuted },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' },
   cardRec: { fontFamily: pixelFont, color: colors.pink, fontSize: 7 },
   cardDays: { fontFamily: pixelFont, color: colors.textDim, fontSize: 6 },
-  snoozeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  snoozeBadgeImg: { width: 12, height: 12 },
-  snoozeBadgeText: { fontFamily: pixelFont, color: colors.orange, fontSize: 6 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  badgeImg: { width: 12, height: 12 },
+  badgeText: { fontFamily: pixelFont, color: colors.orange, fontSize: 6 },
+  vibText: { fontFamily: pixelFont, color: colors.purple, fontSize: 6 },
 
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   modal: {
@@ -378,6 +383,9 @@ const s = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 36,
+    borderTopWidth: 3,
+    borderTopColor: colors.cyan,
+    ...shadow,
   },
   modalTitle: { fontFamily: pixelFont, fontSize: 12, color: colors.cyan, textAlign: 'center', marginBottom: 16 },
 
@@ -390,7 +398,7 @@ const s = StyleSheet.create({
 
   label: { fontFamily: pixelFont, color: colors.textDim, fontSize: 7, marginBottom: 8, letterSpacing: 1 },
 
-  daysRow: { flexDirection: 'row', gap: 6, marginBottom: 14 },
+  daysRow: { flexDirection: 'row', gap: 5, marginBottom: 14 },
   dayBtn: {
     flex: 1,
     alignItems: 'center',
@@ -399,24 +407,29 @@ const s = StyleSheet.create({
     backgroundColor: colors.bg,
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
+    borderBottomWidth: 3,
+    borderBottomColor: '#0e1830',
   },
-  dayBtnOn: { backgroundColor: colors.purple, borderColor: colors.purple },
+  dayBtnOn: { backgroundColor: colors.purple, borderColor: colors.purple, borderBottomColor: '#7030a0' },
   dayText: { fontFamily: pixelFont, color: colors.textDim, fontSize: 7 },
   dayTextOn: { color: '#fff' },
 
-  snoozeRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  snoozeBtn: {
-    flex: 1,
-    alignItems: 'center',
+  optRow: { flexDirection: 'row', gap: 6, marginBottom: 14, flexWrap: 'wrap' },
+  optBtn: {
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
     backgroundColor: colors.bg,
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
+    borderBottomWidth: 3,
+    borderBottomColor: '#0e1830',
   },
-  snoozeBtnOn: { backgroundColor: colors.orange, borderColor: colors.orange },
-  snoozeText: { fontFamily: pixelFont, color: colors.textDim, fontSize: 7 },
-  snoozeTextOn: { color: '#fff' },
+  optBtnOn: { backgroundColor: colors.orange, borderColor: colors.orange, borderBottomColor: '#cc7700' },
+  optText: { fontFamily: pixelFont, color: colors.textDim, fontSize: 7 },
+  optTextOn: { color: '#fff' },
+  vibBtnOn: { backgroundColor: colors.purple, borderColor: colors.purple, borderBottomColor: '#7030a0' },
+  vibTextOn: { color: '#fff' },
 
   noRec: { fontFamily: pixelFont, color: colors.textMuted, fontSize: 7, textAlign: 'center', padding: 12 },
   recScroll: { marginBottom: 16, maxHeight: 44 },
@@ -427,9 +440,11 @@ const s = StyleSheet.create({
     backgroundColor: colors.bg,
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
+    borderBottomWidth: 3,
+    borderBottomColor: '#0e1830',
     marginRight: 8,
   },
-  recChipOn: { backgroundColor: colors.cyan, borderColor: colors.cyan },
+  recChipOn: { backgroundColor: colors.cyan, borderColor: colors.cyan, borderBottomColor: '#0099bb' },
   recChipText: { fontFamily: pixelFont, color: colors.textDim, fontSize: 7 },
   recChipTextOn: { color: '#111' },
 
@@ -442,6 +457,8 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
+    borderBottomWidth: 4,
+    borderBottomColor: '#0e1830',
   },
   cancelText: { fontFamily: pixelFont, color: colors.textDim, fontSize: 8 },
   saveBtn: {
@@ -450,6 +467,9 @@ const s = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: colors.green,
     alignItems: 'center',
+    borderBottomWidth: 4,
+    borderBottomColor: '#1a9050',
+    ...shadow,
   },
   saveText: { fontFamily: pixelFont, color: '#111', fontSize: 8 },
   clearAllBtn: {
@@ -461,13 +481,12 @@ const s = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: colors.coral,
+    borderBottomWidth: 4,
+    borderBottomColor: '#cc2233',
     marginTop: 8,
     gap: 8,
+    ...shadowSmall,
   },
   clearAllImg: { width: 18, height: 18 },
-  clearAllText: {
-    fontFamily: pixelFont,
-    fontSize: 7,
-    color: colors.coral,
-  },
+  clearAllText: { fontFamily: pixelFont, fontSize: 7, color: colors.coral },
 });

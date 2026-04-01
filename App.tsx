@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
 import RecordScreen from './src/screens/RecordScreen';
 import AlarmsScreen from './src/screens/AlarmsScreen';
-import { colors, pixelFont } from './src/theme';
+import { colors, pixelFont, shadow } from './src/theme';
 
 const micIcon = require('./assets/ui/mic_icon.png');
 const alarmIcon = require('./assets/ui/alarm_icon.png');
@@ -56,10 +56,11 @@ const s = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     backgroundColor: colors.card,
-    borderTopWidth: 1.5,
+    borderTopWidth: 2,
     borderTopColor: colors.cardBorder,
     paddingBottom: 28,
     paddingTop: 8,
+    ...shadow,
   },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   tabImg: { width: 26, height: 26, opacity: 0.4 },

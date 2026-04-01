@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   Image,
+  ImageBackground,
   Platform,
   TextInput,
 } from 'react-native';
@@ -14,13 +15,15 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Recording } from '../types';
 import { getRecordings, saveRecordings } from '../utils/storage';
-import { colors, pixelFont } from '../theme';
+import { colors, pixelFont, shadow, shadowSmall, glowPink, glowCoral, glowCyan } from '../theme';
 import SwipeableCard from '../components/SwipeableCard';
+import Waveform from '../components/Waveform';
 
 const recordBtnImg = require('../../assets/ui/record_btn.png');
-const clearAllImg = require('../../assets/ui/clear_all.png');
 const playIcon = require('../../assets/ui/play_icon.png');
 const stopIcon = require('../../assets/ui/stop_icon.png');
+const clearAllImg = require('../../assets/ui/clear_all.png');
+const titleImg = require('../../assets/ui/title_rec.png');
 
 export default function RecordScreen() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -100,7 +103,7 @@ export default function RecordScreen() {
     const { sound } = await Audio.Sound.createAsync({ uri: rec.uri }, { shouldPlay: true, volume: 1.0 });
     soundRef.current = sound;
     setPlayingId(rec.id);
-    sound.setOnPlaybackStatusUpdate((s) => { if (s.isLoaded && s.didJustFinish) setPlayingId(null); });
+    sound.setOnPlaybackStatusUpdate((st) => { if (st.isLoaded && st.didJustFinish) setPlayingId(null); });
   }
 
   async function deleteRecording(rec: Recording) {
@@ -127,10 +130,7 @@ export default function RecordScreen() {
     ]);
   }
 
-  function startRename(rec: Recording) {
-    setEditingId(rec.id);
-    setEditName(rec.name);
-  }
+  function startRename(rec: Recording) { setEditingId(rec.id); setEditName(rec.name); }
 
   async function finishRename(rec: Recording) {
     const name = editName.trim();
@@ -141,46 +141,58 @@ export default function RecordScreen() {
     await saveRecordings(updated);
   }
 
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+  const fmt = (sec: number) => `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
 
   return (
-    <View style={s.container}>
-      <Text style={s.title}>RECORDINGS</Text>
+    <View style={st.container}>
+      <View style={st.titleRow}>
+        <Image source={titleImg} style={st.titleImg} />
+        <Text style={st.title}>RECORDINGS</Text>
+      </View>
 
+      {/* Record Button */}
       <TouchableOpacity
-        style={[s.recordBtn, isRecording && s.recordingBtn]}
+        style={[st.recordBtn, isRecording && st.recordingBtn]}
         onPress={isRecording ? stopRecording : startRecording}
         activeOpacity={0.8}
       >
-        <Image source={recordBtnImg} style={s.recordImg} />
-        <Text style={s.recordText}>
-          {isRecording ? fmt(recordingTime) : 'RECORD'}
-        </Text>
+        {isRecording ? (
+          <View style={st.recordingContent}>
+            <Waveform active={true} color={colors.coral} barCount={16} />
+            <Text style={st.recordTime}>{fmt(recordingTime)}</Text>
+          </View>
+        ) : (
+          <View style={st.recordIdleContent}>
+            <Image source={recordBtnImg} style={st.recordImg} />
+            <Text style={st.recordText}>RECORD</Text>
+          </View>
+        )}
       </TouchableOpacity>
 
+      {/* List */}
       <FlatList
         data={recordings}
         keyExtractor={(i) => i.id}
-        contentContainerStyle={s.list}
+        contentContainerStyle={st.list}
         ListEmptyComponent={
-          <Text style={s.empty}>No recordings yet{'\n'}Tap the button to record!</Text>
+          <Text style={st.empty}>No recordings yet{'\n'}Tap the button to record!</Text>
         }
         ListFooterComponent={recordings.length > 0 ? (
-          <TouchableOpacity style={s.clearAllBtn} onPress={clearAll} activeOpacity={0.7}>
-            <Image source={clearAllImg} style={s.clearAllImg} />
-            <Text style={s.clearAllText}>CLEAR ALL</Text>
+          <TouchableOpacity style={st.clearAllBtn} onPress={clearAll} activeOpacity={0.7}>
+            <Image source={clearAllImg} style={st.clearAllImg} />
+            <Text style={st.clearAllText}>CLEAR ALL</Text>
           </TouchableOpacity>
         ) : null}
         renderItem={({ item }) => (
           <SwipeableCard onDelete={() => deleteRecording(item)}>
-            <View style={[s.card, playingId === item.id && s.cardActive]}>
-              <TouchableOpacity onPress={() => playRecording(item)} activeOpacity={0.7}>
-                <Image source={playingId === item.id ? stopIcon : playIcon} style={s.playImg} />
+            <View style={[st.card, playingId === item.id && st.cardActive]}>
+              <TouchableOpacity onPress={() => playRecording(item)} activeOpacity={0.7} style={st.playBtn}>
+                <Image source={playingId === item.id ? stopIcon : playIcon} style={st.playImg} />
               </TouchableOpacity>
-              <View style={s.cardInfo}>
+              <View style={st.cardInfo}>
                 {editingId === item.id ? (
                   <TextInput
-                    style={s.cardInput}
+                    style={st.cardInput}
                     value={editName}
                     onChangeText={setEditName}
                     onSubmitEditing={() => finishRename(item)}
@@ -190,11 +202,14 @@ export default function RecordScreen() {
                   />
                 ) : (
                   <TouchableOpacity onPress={() => startRename(item)} activeOpacity={0.7}>
-                    <Text style={s.cardName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={st.cardName} numberOfLines={1}>{item.name}</Text>
                   </TouchableOpacity>
                 )}
-                <Text style={s.cardDur}>{fmt(item.duration)}</Text>
+                <Text style={st.cardDur}>{fmt(item.duration)}</Text>
               </View>
+              {playingId === item.id && (
+                <Waveform active={true} color={colors.cyan} barCount={8} />
+              )}
             </View>
           </SwipeableCard>
         )}
@@ -203,37 +218,58 @@ export default function RecordScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingTop: 56 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  titleImg: { width: 32, height: 32 },
   title: {
     fontFamily: pixelFont,
     fontSize: 14,
     color: colors.pink,
     letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   recordBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
     marginHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 20,
+    backgroundColor: colors.card,
     borderWidth: 2,
     borderColor: colors.coral,
-    gap: 10,
+    borderBottomWidth: 5,
+    borderBottomColor: '#cc2233',
+    ...glowCoral,
   },
   recordingBtn: {
     backgroundColor: '#2a1020',
     borderColor: '#ff6b81',
+    borderBottomColor: '#cc3344',
+  },
+  recordIdleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  recordingContent: {
+    alignItems: 'center',
+    gap: 6,
   },
   recordImg: { width: 36, height: 36 },
   recordText: {
     fontFamily: pixelFont,
     fontSize: 11,
+    color: colors.coral,
+  },
+  recordTime: {
+    fontFamily: pixelFont,
+    fontSize: 14,
     color: colors.coral,
   },
   list: { padding: 16, paddingBottom: 100 },
@@ -251,16 +287,30 @@ const s = StyleSheet.create({
     backgroundColor: colors.card,
     padding: 12,
     borderRadius: 16,
-    marginBottom: 8,
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
+    borderBottomWidth: 4,
+    borderBottomColor: '#1a2540',
     gap: 10,
+    ...shadowSmall,
   },
   cardActive: {
     borderColor: colors.cyan,
     backgroundColor: colors.surface,
+    borderBottomColor: '#0a2450',
+    ...glowCyan,
   },
-  playImg: { width: 24, height: 24 },
+  playBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+  },
+  playImg: { width: 20, height: 20 },
   cardInfo: { flex: 1 },
   cardName: {
     fontFamily: pixelFont,
@@ -294,8 +344,11 @@ const s = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: colors.coral,
+    borderBottomWidth: 4,
+    borderBottomColor: '#cc2233',
     marginTop: 8,
     gap: 8,
+    ...shadowSmall,
   },
   clearAllImg: { width: 18, height: 18 },
   clearAllText: {
