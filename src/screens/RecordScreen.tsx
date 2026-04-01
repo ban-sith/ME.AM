@@ -20,9 +20,11 @@ import SwipeableCard from '../components/SwipeableCard';
 import Waveform from '../components/Waveform';
 import Mascot, { MascotState } from '../components/Mascot';
 import FloatingNotes from '../components/FloatingNotes';
+import { getDailyPrompt, getRandomPrompt } from '../utils/prompts';
 
 const starImg = require('../../assets/ui/star.png');
 const starEmptyImg = require('../../assets/ui/star_empty.png');
+
 
 const recordBtnImg = require('../../assets/ui/record_btn.png');
 const playIcon = require('../../assets/ui/play_icon.png');
@@ -36,6 +38,7 @@ export default function RecordScreen() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [prompt, setPrompt] = useState(getDailyPrompt());
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -187,6 +190,12 @@ export default function RecordScreen() {
             <Text style={st.recordText}>RECORD</Text>
           </View>
         )}
+      </TouchableOpacity>
+
+      {/* Daily Prompt */}
+      <TouchableOpacity style={st.promptBox} onPress={() => setPrompt(getRandomPrompt())} activeOpacity={0.7}>
+        <Text style={st.promptText}>"{prompt}"</Text>
+        <Text style={st.promptHint}>tap for another</Text>
       </TouchableOpacity>
 
       {/* List */}
@@ -379,4 +388,24 @@ const st = StyleSheet.create({
     color: colors.coral,
   },
   starImg: { width: 20, height: 20 },
+  promptBox: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  promptText: {
+    fontFamily: pixelFont,
+    fontSize: 7,
+    color: colors.gold,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  promptHint: {
+    fontFamily: pixelFont,
+    fontSize: 5,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
 });

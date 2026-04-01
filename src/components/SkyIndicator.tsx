@@ -5,8 +5,10 @@ import { colors, pixelFont } from '../theme';
 const moonImg = require('../../assets/ui/moon.png');
 const sunImg = require('../../assets/ui/sun.png');
 
+const DEBUG_HOUR: number | null = null; // set to number for testing
+
 function getTimeOfDay(): 'night' | 'dawn' | 'day' | 'dusk' {
-  const h = new Date().getHours();
+  const h = DEBUG_HOUR ?? new Date().getHours();
   if (h >= 5 && h < 7) return 'dawn';
   if (h >= 7 && h < 18) return 'day';
   if (h >= 18 && h < 20) return 'dusk';
@@ -14,7 +16,7 @@ function getTimeOfDay(): 'night' | 'dawn' | 'day' | 'dusk' {
 }
 
 function getGreeting(): string {
-  const h = new Date().getHours();
+  const h = DEBUG_HOUR ?? new Date().getHours();
   if (h >= 5 && h < 12) return 'Good Morning';
   if (h >= 12 && h < 18) return 'Good Afternoon';
   if (h >= 18 && h < 22) return 'Good Evening';
@@ -39,9 +41,6 @@ export default function SkyIndicator() {
   return (
     <View style={s.container}>
       <Image source={isNight ? moonImg : sunImg} style={s.icon} />
-      <Text style={[s.text, isDawn && s.textDawn, !isNight && !isDawn && s.textDay]}>
-        {greeting}
-      </Text>
     </View>
   );
 }

@@ -6,7 +6,7 @@ import RecordScreen from './src/screens/RecordScreen';
 import AlarmsScreen from './src/screens/AlarmsScreen';
 import CapsuleScreen from './src/screens/CapsuleScreen';
 import Starfield from './src/components/Starfield';
-import SkyIndicator from './src/components/SkyIndicator';
+import SplashScreenCustom from './src/components/SplashScreen';
 import { colors, pixelFont, shadow } from './src/theme';
 
 const micIcon = require('./assets/ui/mic_icon.png');
@@ -17,6 +17,7 @@ type Tab = 'records' | 'alarms' | 'capsule';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('records');
+  const [showSplash, setShowSplash] = useState(true);
   const [fontsLoaded] = useFonts({ PressStart2P_400Regular });
 
   useEffect(() => {
@@ -39,7 +40,6 @@ export default function App() {
     <View style={s.container}>
       <StatusBar style="light" />
       <Starfield count={25} />
-      <SkyIndicator />
       {tab === 'records' ? <RecordScreen /> : tab === 'alarms' ? <AlarmsScreen /> : <CapsuleScreen />}
 
       <View style={s.tabBar}>
@@ -56,6 +56,8 @@ export default function App() {
           <Text style={[s.tabLabel, tab === 'capsule' && s.tabLabelPurple]}>CAPSULE</Text>
         </TouchableOpacity>
       </View>
+
+      {showSplash && <SplashScreenCustom onFinish={() => setShowSplash(false)} />}
     </View>
   );
 }
