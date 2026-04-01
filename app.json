@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ME:AM",
-    "slug": "wake-me-up",
+    "slug": "meam",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.wakemeup.app",
+      "bundleIdentifier": "com.meam.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "We need your microphone to record your voice for alarms.",
         "UIBackgroundModes": [
@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#16213e"
       },
-      "package": "com.wakemeup.app",
+      "package": "com.meam.app",
       "permissions": [
         "RECORD_AUDIO",
         "SCHEDULE_EXACT_ALARM",
