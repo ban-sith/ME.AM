@@ -21,6 +21,7 @@ import {
   scheduleSnooze,
   cancelAlarm,
 } from '../utils/notifications';
+import { getRandomFavorite } from '../utils/storage';
 import { colors, pixelFont, shadow, shadowSmall, glowPink, glowCyan, glowGold, VIBRATION_PATTERNS } from '../theme';
 import { startWebAlarmChecker, setAlarmCallback, triggerWebSnooze } from '../utils/webAlarm';
 import PixelToggle from '../components/PixelToggle';
@@ -32,6 +33,7 @@ const arrowUp = require('../../assets/ui/arrow_up.png');
 const arrowDown = require('../../assets/ui/arrow_down.png');
 const snoozeIcon = require('../../assets/ui/snooze_icon.png');
 const clearAllImg = require('../../assets/ui/clear_all.png');
+const shuffleImg = require('../../assets/ui/shuffle.png');
 const alarmImg = require('../../assets/ui/alarm_icon.png');
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -72,8 +74,13 @@ export default function AlarmsScreen() {
   }
 
   async function playAlarmSound(recordingId: string, snoozeMin: number, vib: string) {
-    const recs = await getRecordings();
-    const rec = recs.find((r) => r.id === recordingId);
+    let rec;
+    if (recordingId === 'shuffle') {
+      rec = await getRandomFavorite();
+    } else {
+      const recs = await getRecordings();
+      rec = recs.find((r) => r.id === recordingId);
+    }
     if (!rec) return;
 
     // Vibrate
@@ -356,14 +363,24 @@ export default function AlarmsScreen() {
               <Text style={s.noRec}>Record a voice first</Text>
             ) : (
               <FlatList
-                data={recordings}
+                data={[{ id: 'shuffle', name: 'Shuffle', isShuffle: true }, ...recordings.filter(r => r.favorite).map(r => ({ ...r, isShuffle: false })), ...recordings.filter(r => !r.favorite).map(r => ({ ...r, isShuffle: false }))]}
                 keyExtractor={(i) => i.id}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={s.recScroll}
                 renderItem={({ item }) => (
-                  <TouchableOpacity style={[s.recChip, selRec === item.id && s.recChipOn]} onPress={() => setSelRec(item.id)}>
-                    <Text style={[s.recChipText, selRec === item.id && s.recChipTextOn]} numberOfLines={1}>{item.name}</Text>
+                  <TouchableOpacity
+                    style={[s.recChip, selRec === item.id && s.recChipOn, item.id === 'shuffle' && s.shuffleChip, selRec === 'shuffle' && item.id === 'shuffle' && s.shuffleChipOn]}
+                    onPress={() => setSelRec(item.id)}
+                  >
+                    {item.id === 'shuffle' ? (
+                      <View style={s.shuffleRow}>
+                        <Image source={shuffleImg} style={s.shuffleImg} />
+                        <Text style={[s.recChipText, selRec === 'shuffle' && s.recChipTextOn]}>Shuffle</Text>
+                      </View>
+                    ) : (
+                      <Text style={[s.recChipText, selRec === item.id && s.recChipTextOn]} numberOfLines={1}>{item.name}</Text>
+                    )}
                   </TouchableOpacity>
                 )}
               />
@@ -515,6 +532,10 @@ const s = StyleSheet.create({
   recChipOn: { backgroundColor: colors.cyan, borderColor: colors.cyan, borderBottomColor: '#0099bb' },
   recChipText: { fontFamily: pixelFont, color: colors.textDim, fontSize: 7 },
   recChipTextOn: { color: '#111' },
+  shuffleChip: { borderColor: colors.gold },
+  shuffleChipOn: { backgroundColor: colors.gold, borderColor: colors.gold },
+  shuffleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  shuffleImg: { width: 14, height: 14 },
 
   actions: { flexDirection: 'row', gap: 10 },
   cancelBtn: {

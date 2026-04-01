@@ -4,14 +4,16 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
 import RecordScreen from './src/screens/RecordScreen';
 import AlarmsScreen from './src/screens/AlarmsScreen';
+import CapsuleScreen from './src/screens/CapsuleScreen';
 import Starfield from './src/components/Starfield';
 import SkyIndicator from './src/components/SkyIndicator';
 import { colors, pixelFont, shadow } from './src/theme';
 
 const micIcon = require('./assets/ui/mic_icon.png');
 const alarmIcon = require('./assets/ui/alarm_icon.png');
+const capsuleIcon = require('./assets/ui/capsule.png');
 
-type Tab = 'records' | 'alarms';
+type Tab = 'records' | 'alarms' | 'capsule';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('records');
@@ -38,7 +40,7 @@ export default function App() {
       <StatusBar style="light" />
       <Starfield count={25} />
       <SkyIndicator />
-      {tab === 'records' ? <RecordScreen /> : <AlarmsScreen />}
+      {tab === 'records' ? <RecordScreen /> : tab === 'alarms' ? <AlarmsScreen /> : <CapsuleScreen />}
 
       <View style={s.tabBar}>
         <TouchableOpacity style={s.tab} onPress={() => setTab('records')} activeOpacity={0.7}>
@@ -48,6 +50,10 @@ export default function App() {
         <TouchableOpacity style={s.tab} onPress={() => setTab('alarms')} activeOpacity={0.7}>
           <Image source={alarmIcon} style={[s.tabImg, tab === 'alarms' && s.tabImgActive]} />
           <Text style={[s.tabLabel, tab === 'alarms' && s.tabLabelActive]}>ALARMS</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={s.tab} onPress={() => setTab('capsule')} activeOpacity={0.7}>
+          <Image source={capsuleIcon} style={[s.tabImg, tab === 'capsule' && s.tabImgActive]} />
+          <Text style={[s.tabLabel, tab === 'capsule' && s.tabLabelPurple]}>CAPSULE</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -76,4 +82,5 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   tabLabelActive: { color: colors.pink },
+  tabLabelPurple: { color: colors.purple },
 });

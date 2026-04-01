@@ -21,6 +21,9 @@ import Waveform from '../components/Waveform';
 import Mascot, { MascotState } from '../components/Mascot';
 import FloatingNotes from '../components/FloatingNotes';
 
+const starImg = require('../../assets/ui/star.png');
+const starEmptyImg = require('../../assets/ui/star_empty.png');
+
 const recordBtnImg = require('../../assets/ui/record_btn.png');
 const playIcon = require('../../assets/ui/play_icon.png');
 const stopIcon = require('../../assets/ui/stop_icon.png');
@@ -140,6 +143,12 @@ export default function RecordScreen() {
 
   function startRename(rec: Recording) { setEditingId(rec.id); setEditName(rec.name); }
 
+  async function toggleFavorite(rec: Recording) {
+    const updated = recordings.map((r) => r.id === rec.id ? { ...r, favorite: !r.favorite } : r);
+    setRecordings(updated);
+    await saveRecordings(updated);
+  }
+
   async function finishRename(rec: Recording) {
     const name = editName.trim();
     setEditingId(null);
@@ -221,6 +230,9 @@ export default function RecordScreen() {
               {playingId === item.id && (
                 <Waveform active={true} color={colors.cyan} barCount={8} />
               )}
+              <TouchableOpacity onPress={() => toggleFavorite(item)} activeOpacity={0.6}>
+                <Image source={item.favorite ? starImg : starEmptyImg} style={st.starImg} />
+              </TouchableOpacity>
             </View>
           </SwipeableCard>
         )}
@@ -366,4 +378,5 @@ const st = StyleSheet.create({
     fontSize: 7,
     color: colors.coral,
   },
+  starImg: { width: 20, height: 20 },
 });
