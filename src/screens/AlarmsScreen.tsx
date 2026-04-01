@@ -22,6 +22,7 @@ import {
   cancelAlarm,
 } from '../utils/notifications';
 import { colors, pixelFont, shadow, shadowSmall, glowPink, glowCyan, glowGold, VIBRATION_PATTERNS } from '../theme';
+import { startWebAlarmChecker, setAlarmCallback, triggerWebSnooze } from '../utils/webAlarm';
 import PixelToggle from '../components/PixelToggle';
 import SwipeableCard from '../components/SwipeableCard';
 import Waveform from '../components/Waveform';
@@ -31,7 +32,7 @@ const arrowUp = require('../../assets/ui/arrow_up.png');
 const arrowDown = require('../../assets/ui/arrow_down.png');
 const snoozeIcon = require('../../assets/ui/snooze_icon.png');
 const clearAllImg = require('../../assets/ui/clear_all.png');
-const titleImg = require('../../assets/ui/title_alarm.png');
+const alarmImg = require('../../assets/ui/alarm_icon.png');
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const SNOOZE_OPTIONS = [0, 5, 10, 15];
@@ -40,6 +41,7 @@ export default function AlarmsScreen() {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [editingAlarm, setEditingAlarm] = useState<Alarm | null>(null);
   const [hour, setHour] = useState(7);
   const [minute, setMinute] = useState(0);
   const [selRec, setSelRec] = useState<string | null>(null);
@@ -52,6 +54,15 @@ export default function AlarmsScreen() {
     loadData();
     const sub1 = Notifications.addNotificationReceivedListener(onNotif);
     const sub2 = Notifications.addNotificationResponseReceivedListener((r) => onNotif(r.notification));
+
+    // Web alarm checker
+    if (Platform.OS === 'web') {
+      setAlarmCallback((recordingId, snoozeMin) => {
+        playAlarmSound(recordingId, snoozeMin, 'default');
+      });
+      startWebAlarmChecker();
+    }
+
     return () => { sub1.remove(); sub2.remove(); soundRef.current?.unloadAsync(); };
   }, []);
 
@@ -89,7 +100,11 @@ export default function AlarmsScreen() {
         text: `Snooze (${snoozeMin}m)`,
         onPress: async () => {
           await sound.stopAsync(); await sound.unloadAsync(); soundRef.current = null; Vibration.cancel();
-          await scheduleSnooze('snooze', recordingId, snoozeMin);
+          if (Platform.OS === 'web') {
+            triggerWebSnooze(recordingId, snoozeMin);
+          } else {
+            await scheduleSnooze('snooze', recordingId, snoozeMin);
+          }
         },
       });
     }
@@ -103,25 +118,68 @@ export default function AlarmsScreen() {
     if (r.length > 0 && !selRec) setSelRec(r[0].id);
   }
 
-  async function addAlarm() {
-    if (!selRec) { Alert.alert('Error', 'Record a voice first!'); return; }
-    const alarm: Alarm = {
-      id: Date.now().toString(),
-      hour, minute,
-      recordingId: selRec,
-      enabled: true,
-      days: selDays,
-      snoozeMinutes: snooze,
-      vibration,
-    };
-    try { await requestPermissions(); alarm.notificationId = await scheduleAlarm(alarm); } catch {}
-    const updated = [alarm, ...alarms];
-    setAlarms(updated);
-    await saveAlarms(updated);
-    setShowModal(false);
+  function openNewAlarm() {
+    setEditingAlarm(null);
+    setHour(7);
+    setMinute(0);
     setSelDays([]);
     setSnooze(5);
     setVibration('default');
+    loadData();
+    setShowModal(true);
+  }
+
+  function openEditAlarm(alarm: Alarm) {
+    setEditingAlarm(alarm);
+    setHour(alarm.hour);
+    setMinute(alarm.minute);
+    setSelRec(alarm.recordingId);
+    setSelDays([...alarm.days]);
+    setSnooze(alarm.snoozeMinutes);
+    setVibration(alarm.vibration || 'default');
+    loadData();
+    setShowModal(true);
+  }
+
+  async function saveAlarmFromModal() {
+    if (!selRec) { Alert.alert('Error', 'Record a voice first!'); return; }
+
+    if (editingAlarm) {
+      // Cancel old notification
+      if (editingAlarm.notificationId) try { await cancelAlarm(editingAlarm.notificationId); } catch {}
+
+      const updated: Alarm = {
+        ...editingAlarm,
+        hour, minute,
+        recordingId: selRec,
+        days: selDays,
+        snoozeMinutes: snooze,
+        vibration,
+        enabled: true,
+      };
+      try { await requestPermissions(); updated.notificationId = await scheduleAlarm(updated); } catch {}
+
+      const newAlarms = alarms.map((a) => a.id === updated.id ? updated : a);
+      setAlarms(newAlarms);
+      await saveAlarms(newAlarms);
+    } else {
+      const alarm: Alarm = {
+        id: Date.now().toString(),
+        hour, minute,
+        recordingId: selRec,
+        enabled: true,
+        days: selDays,
+        snoozeMinutes: snooze,
+        vibration,
+      };
+      try { await requestPermissions(); alarm.notificationId = await scheduleAlarm(alarm); } catch {}
+      const updated = [alarm, ...alarms];
+      setAlarms(updated);
+      await saveAlarms(updated);
+    }
+
+    setShowModal(false);
+    setEditingAlarm(null);
   }
 
   async function toggleAlarm(alarm: Alarm) {
@@ -145,19 +203,29 @@ export default function AlarmsScreen() {
     await saveAlarms(updated);
   }
 
-  function clearAllAlarms() {
+  async function clearAllAlarms() {
     if (alarms.length === 0) return;
-    Alert.alert('Delete All', `Delete all ${alarms.length} alarms?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete All', style: 'destructive',
-        onPress: async () => {
-          for (const a of alarms) { if (a.notificationId) try { await cancelAlarm(a.notificationId); } catch {} }
-          setAlarms([]);
-          await saveAlarms([]);
-        },
-      },
-    ]);
+    if (Platform.OS === 'web') {
+      if (!window.confirm(`Delete all ${alarms.length} alarms?`)) return;
+    } else {
+      return new Promise<void>((resolve) => {
+        Alert.alert('Delete All', `Delete all ${alarms.length} alarms?`, [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve() },
+          {
+            text: 'Delete All', style: 'destructive',
+            onPress: async () => {
+              for (const a of alarms) { if (a.notificationId) try { await cancelAlarm(a.notificationId); } catch {} }
+              setAlarms([]);
+              await saveAlarms([]);
+              resolve();
+            },
+          },
+        ]);
+      });
+    }
+    for (const a of alarms) { if (a.notificationId) try { await cancelAlarm(a.notificationId); } catch {} }
+    setAlarms([]);
+    await saveAlarms([]);
   }
 
   function toggleDay(d: number) {
@@ -180,11 +248,11 @@ export default function AlarmsScreen() {
   return (
     <View style={s.container}>
       <View style={s.titleRow}>
-        <Image source={titleImg} style={s.titleImg} />
+        <Image source={alarmImg} style={s.titleImg} />
         <Text style={s.title}>ALARMS</Text>
       </View>
 
-      <TouchableOpacity style={s.addBtn} onPress={() => { loadData(); setShowModal(true); }} activeOpacity={0.8}>
+      <TouchableOpacity style={s.addBtn} onPress={openNewAlarm} activeOpacity={0.8}>
         <Image source={addIcon} style={s.addImg} />
         <Text style={s.addText}>NEW ALARM</Text>
       </TouchableOpacity>
@@ -202,7 +270,7 @@ export default function AlarmsScreen() {
         ) : null}
         renderItem={({ item }) => (
           <SwipeableCard onDelete={() => deleteAlarm(item)}>
-            <View style={[s.card, !item.enabled && s.cardOff]}>
+            <TouchableOpacity style={[s.card, !item.enabled && s.cardOff]} onPress={() => openEditAlarm(item)} activeOpacity={0.7}>
               <View style={s.cardLeft}>
                 <Text style={[s.cardTime, !item.enabled && s.cardTimeOff]}>{pad(item.hour)}:{pad(item.minute)}</Text>
                 <View style={s.cardMeta}>
@@ -218,7 +286,7 @@ export default function AlarmsScreen() {
                 </View>
               </View>
               <PixelToggle value={item.enabled} onToggle={() => toggleAlarm(item)} />
-            </View>
+            </TouchableOpacity>
           </SwipeableCard>
         )}
       />
@@ -227,7 +295,7 @@ export default function AlarmsScreen() {
       <Modal visible={showModal} animationType="slide" transparent>
         <View style={s.overlay}>
           <View style={s.modal}>
-            <Text style={s.modalTitle}>NEW ALARM</Text>
+            <Text style={s.modalTitle}>{editingAlarm ? 'EDIT ALARM' : 'NEW ALARM'}</Text>
 
             {/* Time */}
             <View style={s.timePicker}>
@@ -306,7 +374,7 @@ export default function AlarmsScreen() {
               <TouchableOpacity style={s.cancelBtn} onPress={() => setShowModal(false)}>
                 <Text style={s.cancelText}>CANCEL</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[s.saveBtn, !selRec && { opacity: 0.4 }]} onPress={addAlarm} disabled={!selRec}>
+              <TouchableOpacity style={[s.saveBtn, !selRec && { opacity: 0.4 }]} onPress={saveAlarmFromModal} disabled={!selRec}>
                 <Text style={s.saveText}>SAVE</Text>
               </TouchableOpacity>
             </View>
@@ -318,7 +386,7 @@ export default function AlarmsScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingTop: 56 },
+  container: { flex: 1, backgroundColor: 'transparent', paddingTop: 8 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',

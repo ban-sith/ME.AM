@@ -18,12 +18,13 @@ import { getRecordings, saveRecordings } from '../utils/storage';
 import { colors, pixelFont, shadow, shadowSmall, glowPink, glowCoral, glowCyan } from '../theme';
 import SwipeableCard from '../components/SwipeableCard';
 import Waveform from '../components/Waveform';
+import Mascot, { MascotState } from '../components/Mascot';
+import FloatingNotes from '../components/FloatingNotes';
 
 const recordBtnImg = require('../../assets/ui/record_btn.png');
 const playIcon = require('../../assets/ui/play_icon.png');
 const stopIcon = require('../../assets/ui/stop_icon.png');
 const clearAllImg = require('../../assets/ui/clear_all.png');
-const titleImg = require('../../assets/ui/title_rec.png');
 
 export default function RecordScreen() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -113,21 +114,28 @@ export default function RecordScreen() {
     await saveRecordings(updated);
   }
 
-  function clearAll() {
+  async function clearAll() {
     if (recordings.length === 0) return;
-    Alert.alert('Delete All', `Delete all ${recordings.length} recordings?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete All', style: 'destructive',
-        onPress: async () => {
-          if (Platform.OS !== 'web') {
-            for (const r of recordings) await FileSystem.deleteAsync(r.uri, { idempotent: true });
-          }
-          setRecordings([]);
-          await saveRecordings([]);
-        },
-      },
-    ]);
+    if (Platform.OS === 'web') {
+      if (!window.confirm(`Delete all ${recordings.length} recordings?`)) return;
+    } else {
+      return new Promise<void>((resolve) => {
+        Alert.alert('Delete All', `Delete all ${recordings.length} recordings?`, [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve() },
+          {
+            text: 'Delete All', style: 'destructive',
+            onPress: async () => {
+              for (const r of recordings) await FileSystem.deleteAsync(r.uri, { idempotent: true });
+              setRecordings([]);
+              await saveRecordings([]);
+              resolve();
+            },
+          },
+        ]);
+      });
+    }
+    setRecordings([]);
+    await saveRecordings([]);
   }
 
   function startRename(rec: Recording) { setEditingId(rec.id); setEditName(rec.name); }
@@ -143,11 +151,14 @@ export default function RecordScreen() {
 
   const fmt = (sec: number) => `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
 
+  const mascotState: MascotState = isRecording ? 'awake' : playingId ? 'waking' : 'sleep';
+
   return (
     <View style={st.container}>
       <View style={st.titleRow}>
-        <Image source={titleImg} style={st.titleImg} />
+        <Mascot state={mascotState} size={36} />
         <Text style={st.title}>RECORDINGS</Text>
+        <FloatingNotes active={!!playingId || isRecording} count={3} areaWidth={40} areaHeight={30} />
       </View>
 
       {/* Record Button */}
@@ -219,7 +230,7 @@ export default function RecordScreen() {
 }
 
 const st = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingTop: 56 },
+  container: { flex: 1, backgroundColor: 'transparent', paddingTop: 8 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -227,7 +238,6 @@ const st = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
   },
-  titleImg: { width: 32, height: 32 },
   title: {
     fontFamily: pixelFont,
     fontSize: 14,

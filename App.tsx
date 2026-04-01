@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
 import RecordScreen from './src/screens/RecordScreen';
 import AlarmsScreen from './src/screens/AlarmsScreen';
+import Starfield from './src/components/Starfield';
+import SkyIndicator from './src/components/SkyIndicator';
 import { colors, pixelFont, shadow } from './src/theme';
 
 const micIcon = require('./assets/ui/mic_icon.png');
@@ -34,6 +36,8 @@ export default function App() {
   return (
     <View style={s.container}>
       <StatusBar style="light" />
+      <Starfield count={25} />
+      <SkyIndicator />
       {tab === 'records' ? <RecordScreen /> : <AlarmsScreen />}
 
       <View style={s.tabBar}>

@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0a0a1a"
+      "backgroundColor": "#16213e"
     },
     "ios": {
       "supportsTablet": false,
@@ -25,7 +25,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0a0a1a"
+        "backgroundColor": "#16213e"
       },
       "package": "com.wakemeup.app",
       "permissions": [
